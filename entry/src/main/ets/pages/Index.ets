@@ -1,16 +1,14 @@
-import { promptAction } from '@kit.ArkUI';
+import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 
 function applyOpacityToHexColor(hexColor: string, opacity: number): string {
-  let normalizedOpacity: number;
-  normalizedOpacity = Math.max(0, Math.min(1, opacity));
-
+  const normalizedOpacity: number = Math.max(0, Math.min(1, opacity));
   const alphaDecimal: number = normalizedOpacity * 255;
   const alphaInteger: number = Math.round(alphaDecimal);
 
   let alphaHex: string = alphaInteger.toString(16);
 
   if (alphaHex.length < 2) {
-    alphaHex = '0' + alphaHex;
+    alphaHex = `0 ${alphaHex}`;
   } else {
   }
 
@@ -80,11 +78,18 @@ const BULB_ON_SHADOW_RADIUS: number = 10;
 const GRID_SHADOW_RADIUS: number = 5;
 const GRID_SHADOW_OFFSET_Y: number = 3;
 
+interface Bulb {
+  readonly index: number,
+  readonly isOn: boolean
+}
+
+const INITIAL_BULBS: Bulb[] =
+  [{ index: 0, isOn: false }, { index: 1, isOn: false }, { index: 2, isOn: false }, { index: 3, isOn: false }];
 
 @Entry
 @Component
 struct LightBulbGame {
-  @State bulbs: boolean[] = [false, false, false, false];
+  @State bulbs: Bulb[] = [...INITIAL_BULBS];
   @State userGuessedIndex: number | null = null;
   @State targetBulb: number = 0;
   @State score: number = 0;
@@ -94,11 +99,39 @@ struct LightBulbGame {
   @State revealTargetOnWrong: boolean = false;
 
   resetVisualStates(): void {
-    const newBulbsState: boolean[] = [false, false, false, false];
-    this.bulbs = newBulbsState;
+    this.bulbs = [...INITIAL_BULBS];
     this.userGuessedIndex = null;
     this.isSystemFlashing = false;
     this.revealTargetOnWrong = false;
+  }
+
+  /**
+   * Generates a cryptographically secure random floating-point number
+   * within the range [min, max).
+   *
+   * The function uses synchronous crypto-secure random bytes, converts them
+   * into a 53-bit normalized floating-point value in the range [0, 1),
+   * and then maps that value to the specified range.
+   *
+   * @param min - The lower bound (inclusive).
+   * @param max - The upper bound (exclusive).
+   * @returns A secure random number x such that min ≤ x < max.
+   */
+  generateSecureRandomNumber(min: number, max: number): number {
+    const rand = cryptoFramework.createRandom();
+    const len = 8; // 8 bytes (64 bits)
+    const randData = rand.generateRandomSync(len);
+    const bytes = randData.data;
+    let bigIntValue = BigInt(0);
+    // Combine all 64 bits into a BigInt
+    for (let i = 0; i < 8; i++) {
+      bigIntValue = (bigIntValue << BigInt(8)) | BigInt(bytes[i]);
+    }
+    // Take the upper 53 bits for full floating-point precision
+    const maxSafeValue = BigInt(1) << BigInt(53); // 2^53
+    const normalized = Number(bigIntValue >> BigInt(11)) / Number(maxSafeValue);
+    // Map to [min, max)
+    return min + normalized * (max - min);
   }
 
   startRound(): void {
@@ -106,35 +139,38 @@ struct LightBulbGame {
     this.isPlaying = true;
 
     const numberOfBulbs: number = this.bulbs.length;
-    const randomFloat: number = Math.random();
-    const randomIndex: number = Math.floor(randomFloat * numberOfBulbs);
-    this.targetBulb = randomIndex;
+    const randomIndex = this.generateSecureRandomNumber(0, numberOfBulbs - 1);
+    const rounded = Math.round(randomIndex);
+    this.targetBulb = rounded;
 
     this.message = 'Watch the light!';
     this.isSystemFlashing = true;
 
     const flashOnDelay: number = 1000;
     setTimeout(() => {
-      const stillInFlashingPhase: boolean = this.isPlaying && this.isSystemFlashing && this.message === 'Watch the light!';
+      const stillInFlashingPhase: boolean =
+        this.isPlaying && this.isSystemFlashing && this.message === 'Watch the light!';
       if (!stillInFlashingPhase) {
         this.resetVisualStates();
         return;
       }
 
-      const newBulbsAfterFlashOn: boolean[] = [...this.bulbs];
-      newBulbsAfterFlashOn[this.targetBulb] = true;
+      const newBulbsAfterFlashOn: Bulb[] = [...this.bulbs];
+      newBulbsAfterFlashOn[this.targetBulb] = { index: newBulbsAfterFlashOn[this.targetBulb].index, isOn: true };
       this.bulbs = newBulbsAfterFlashOn;
 
       const flashOffDelay: number = 1000;
       setTimeout(() => {
-        const stillInFlashingPhaseForOff: boolean = this.isPlaying && this.isSystemFlashing && this.message === 'Watch the light!';
+        const stillInFlashingPhaseForOff: boolean =
+          this.isPlaying && this.isSystemFlashing && this.message === 'Watch the light!';
         if (!stillInFlashingPhaseForOff) {
           this.resetVisualStates();
           return;
         }
 
-        const resetBulbsAfterFlashOff: boolean[] = [...this.bulbs];
-        resetBulbsAfterFlashOff[this.targetBulb] = false;
+        const resetBulbsAfterFlashOff: Bulb[] = [...this.bulbs];
+        resetBulbsAfterFlashOff[this.targetBulb] =
+          { index: resetBulbsAfterFlashOff[this.targetBulb].index, isOn: false };
         this.bulbs = resetBulbsAfterFlashOff;
 
         this.isSystemFlashing = false;
@@ -152,8 +188,8 @@ struct LightBulbGame {
     this.isPlaying = false;
     this.userGuessedIndex = selectedIndex;
 
-    const bulbsToShowUserGuess: boolean[] = [false, false, false, false];
-    bulbsToShowUserGuess[selectedIndex] = true;
+    const bulbsToShowUserGuess: Bulb[] = [...INITIAL_BULBS];
+    bulbsToShowUserGuess[selectedIndex] = { index: bulbsToShowUserGuess[selectedIndex].index, isOn: true };
     this.bulbs = bulbsToShowUserGuess;
 
     let wasGuessCorrect: boolean;
@@ -164,26 +200,24 @@ struct LightBulbGame {
     }
 
     if (wasGuessCorrect === true) {
-      let currentScore: number = this.score;
-      let newScore: number = currentScore + 1;
-      this.score = newScore;
+      this.score = this.score + 1;
 
       const correctToastMessage: string = 'Correct! +1';
       const correctToastDuration: number = 1000;
-      promptAction.showToast({ message: correctToastMessage, duration: correctToastDuration });
-
+      this.getUIContext().getPromptAction().showToast({ message: correctToastMessage, duration: correctToastDuration })
     } else {
       this.revealTargetOnWrong = true;
 
-      const updatedBulbsForWrongGuess: boolean[] = [...this.bulbs];
+      const updatedBulbsForWrongGuess: Bulb[] = [...this.bulbs];
       if (this.targetBulb !== selectedIndex) {
-        updatedBulbsForWrongGuess[this.targetBulb] = true;
+        updatedBulbsForWrongGuess[this.targetBulb] =
+          { index: updatedBulbsForWrongGuess[this.targetBulb].index, isOn: true };
       }
       this.bulbs = updatedBulbsForWrongGuess;
 
       const wrongToastMessage: string = `Wrong! B${this.targetBulb + 1}`;
       const wrongToastDuration: number = 1500;
-      promptAction.showToast({ message: wrongToastMessage, duration: wrongToastDuration });
+      this.getUIContext().getPromptAction().showToast({ message: wrongToastMessage, duration: wrongToastDuration })
     }
 
     let endOfRoundDelay: number;
@@ -262,74 +296,70 @@ struct LightBulbGame {
         });
 
       Grid() {
-        ForEach(
-          this.bulbs,
-          (isOn: boolean, index: number) => {
-            GridItem() {
-              Column() {
-                Toggle({
-                  type: ToggleType.Switch,
-                  isOn: isOn
-                })
-                  .height(TOGGLE_HEIGHT)
-                  .width(TOGGLE_WIDTH)
-                  .selectedColor(this.determineBulbColor(index, true))
-                  .switchPointColor(Color.White)
-                  .enabled(this.message === 'Your turn!' && this.isPlaying)
-                  .onChange((value: boolean) => {
-                    const canUserInteractWithToggle: boolean = this.message === 'Your turn!' && this.isPlaying;
-                    if (value === true && canUserInteractWithToggle) {
-                      this.checkGuess(index);
-                    } else if (value === false && this.bulbs[index] === true && canUserInteractWithToggle) {
-                    }
-                  })
-                  .margin({ bottom: PADDING_GRID_ITEM_CONTENT / 2 })
-                  .animation({ duration: 200, curve: Curve.EaseOut });
-
-                Text(`B${index + 1}`)
-                  .fontSize(FONT_SIZE_BULB_LABEL)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(TEXT_COLOR_PRIMARY);
-
-              }
-              .width(BULB_ITEM_SIZE)
-              .height(BULB_ITEM_SIZE)
-              .backgroundColor(this.determineBulbColor(index, isOn))
-              .borderRadius(BORDER_RADIUS_BULB_INNER)
-              .justifyContent(FlexAlign.Center)
-              .alignItems(HorizontalAlign.Center)
-              .padding(PADDING_GRID_ITEM_CONTENT)
-              .border({
-                width: 2,
-                color: '#33000000',
-                radius: BORDER_RADIUS_BULB_INNER
+        ForEach(this.bulbs, (bulb: Bulb) => {
+          GridItem() {
+            Column() {
+              Toggle({
+                type: ToggleType.Switch,
+                isOn: bulb.isOn
               })
-              .shadow(
-                isOn ?
-                  {
-                    radius: BULB_ON_SHADOW_RADIUS,
-                    color: applyOpacityToHexColor(this.determineBulbColor(index, isOn) as string, BULB_GLOW_OPACITY_FOR_SHADOW),
-                    offsetX: 0,
-                    offsetY: 0
-                  } :
-                  {
-                    radius: BULB_OFF_SHADOW_RADIUS,
-                    color: SHADOW_COLOR_LIGHT,
-                    offsetX: BULB_OFF_SHADOW_OFFSET,
-                    offsetY: BULB_OFF_SHADOW_OFFSET
+                .height(TOGGLE_HEIGHT)
+                .width(TOGGLE_WIDTH)
+                .selectedColor(this.determineBulbColor(bulb.index, true))
+                .switchPointColor(Color.White)
+                .enabled(this.message === 'Your turn!' && this.isPlaying)
+                .onChange((value: boolean) => {
+                  const canUserInteractWithToggle: boolean = this.message === 'Your turn!' && this.isPlaying;
+                  if (value === true && canUserInteractWithToggle) {
+                    this.checkGuess(bulb.index);
+                  } else if (value === false && this.bulbs[bulb.index].isOn === true && canUserInteractWithToggle) {
                   }
-              )
-              .animation({
-                duration: 250,
-                curve: Curve.EaseOut
-              });
+                })
+                .margin({ bottom: PADDING_GRID_ITEM_CONTENT / 2 })
+                .animation({ duration: 200, curve: Curve.EaseOut });
+
+              Text(`B${bulb.index + 1}`)
+                .fontSize(FONT_SIZE_BULB_LABEL)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(TEXT_COLOR_PRIMARY);
 
             }
-            .padding(PADDING_GRID_ITEM_CONTAINER / 3)
-            .borderRadius(BORDER_RADIUS_BULB_OUTER);
+            .width(BULB_ITEM_SIZE)
+            .height(BULB_ITEM_SIZE)
+            .backgroundColor(this.determineBulbColor(bulb.index, bulb.isOn))
+            .borderRadius(BORDER_RADIUS_BULB_INNER)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+            .padding(PADDING_GRID_ITEM_CONTENT)
+            .border({
+              width: 2,
+              color: '#33000000',
+              radius: BORDER_RADIUS_BULB_INNER
+            })
+            .shadow(
+              bulb.isOn ?
+                {
+                  radius: BULB_ON_SHADOW_RADIUS,
+                  color: applyOpacityToHexColor(this.determineBulbColor(bulb.index, bulb.isOn) as string,
+                    BULB_GLOW_OPACITY_FOR_SHADOW),
+                  offsetX: 0,
+                  offsetY: 0
+                } :
+                {
+                  radius: BULB_OFF_SHADOW_RADIUS,
+                  color: SHADOW_COLOR_LIGHT,
+                  offsetX: BULB_OFF_SHADOW_OFFSET,
+                  offsetY: BULB_OFF_SHADOW_OFFSET
+                }
+            )
+            .animation({
+              duration: 250,
+              curve: Curve.EaseOut
+            });
           }
-        );
-
+          .padding(PADDING_GRID_ITEM_CONTAINER / 3)
+          .borderRadius(BORDER_RADIUS_BULB_OUTER);
+        }, (bulb: Bulb) => `${bulb.index}_${bulb.isOn}`);
       }
       .columnsTemplate('1fr 1fr')
       .rowsTemplate('1fr 1fr')
@@ -349,7 +379,12 @@ struct LightBulbGame {
     }
     .width('100%')
     .height('100%')
-    .padding({top: PADDING_MAIN_TOP, bottom: PADDING_MAIN_BOTTOM, left: PADDING_MAIN_LEFT, right: PADDING_MAIN_RIGHT})
+    .padding({
+      top: PADDING_MAIN_TOP,
+      bottom: PADDING_MAIN_BOTTOM,
+      left: PADDING_MAIN_LEFT,
+      right: PADDING_MAIN_RIGHT
+    })
     .backgroundColor(APP_BACKGROUND_COLOR)
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)

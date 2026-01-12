@@ -16,8 +16,6 @@ A simple memory game where players must remember and tap the correct light bulb.
 
 Perfect for quick cognitive training, casual gaming, or testing short-term memory on small wearable screens.
 
-# Features
-
 - Randomly lights up one of four bulbs
 - Player must remember and tap the correct bulb
 - Score tracking system
@@ -29,7 +27,11 @@ Perfect for quick cognitive training, casual gaming, or testing short-term memor
 - **Languages**: ArkTS
 - **Frameworks**: HarmonyOS SDK
 - **Tools**: DevEco Studio
-- **Libraries**: @kit.ArkUI
+- **Libraries**:
+    - `@kit.AbilityKit`
+    - `@kit.ArkUI`
+    - `@kit.CryptoArchitectureKit`
+    - `@kit.PerformanceAnalysisKit`
 
 # Directory Structure
 
@@ -93,9 +95,10 @@ Perfect for quick cognitive training, casual gaming, or testing short-term memor
 # Constraints and Restrictions
 
 ## Supported Devices
+
 - Huawei Watch 5
 
-# LICENSE
+# License
 
 Light Bulb Game is distributed under the terms of the MIT License.  
 See the [LICENSE](/LICENSE) for more information.

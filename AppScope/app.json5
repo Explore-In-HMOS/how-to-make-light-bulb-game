@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "com.hmosdemos.lightbulbgame",
+    "bundleName": "com.hmosdemos.wearable.how_to_make_light_bulb_game",
     "vendor": "hmosdemos",
     "versionCode": 1000000,
     "versionName": "1.0.0",
